@@ -6,14 +6,23 @@
 
 namespace saka
 {
+    template <class T>
+    struct Pair
+    {
+        Pair(){}
+        Pair(T l, T r) :lhs(l), rhs(r) {}
+        T lhs, rhs;
+    };
+
     class Val_;
     class Func_
     {
     public:
-        std::shared_ptr<Val_> input;
+        Pair<std::shared_ptr<Val_>> inputs;
+
         virtual ~Func_() {}
-        virtual float forward(float x) const = 0;
-        virtual float backward(float x, float dy) const = 0;
+        virtual float forward(Pair<float> xs) const = 0;
+        virtual Pair<float> backward(Pair<float> xs, float dy) const = 0;
     };
     class Val_
     {
@@ -32,77 +41,99 @@ namespace saka
             {
                 derivative = 1.0f;
             }
-            std::shared_ptr<Val_> input = manufacturer->input;
-            input->derivative += manufacturer->backward(input->value, derivative);
-            input->backward(false /*leaf*/);
+            Pair<std::shared_ptr<Val_>> inputs = manufacturer->inputs;
+            Pair<float> ds = manufacturer->backward({ inputs.lhs->value, inputs.rhs->value }, derivative);
+            inputs.lhs->derivative += ds.lhs;
+            inputs.rhs->derivative += ds.rhs;
+            inputs.lhs->backward(false /*leaf*/);
+            inputs.rhs->backward(false /*leaf*/);
         }
     };
 
     class Val
     {
     public:
-        Val(float value):m_val(new Val_())
+        Val(float value):m_impl(new Val_())
         {
-            m_val->value = value;
+            m_impl->value = value;
         }
         void backward()
         {
-            m_val->backward(true /*leaf*/);
+            m_impl->backward(true /*leaf*/);
         }
         float derivative() const {
-            return m_val->derivative;
+            return m_impl->derivative;
         }
-        std::shared_ptr<Val_> m_val;
+        std::shared_ptr<Val_> m_impl;
     };
     class Func
     {
     public:
-        Func(std::shared_ptr<Func_> f):m_val(f){}
-        Val forward(Val x)
+        Func(std::shared_ptr<Func_> f):m_impl(f){}
+        Val forward(Pair<Val> xs)
         {
-            float y = m_val->forward(x.m_val->value);
+            
+            float y = m_impl->forward({ xs.lhs.m_impl->value, xs.rhs.m_impl->value });
             Val r(y);
-            m_val->input = x.m_val;
-            r.m_val->manufacturer = m_val;
+            m_impl->inputs = { xs.lhs.m_impl, xs.rhs.m_impl };
+            r.m_impl->manufacturer = m_impl;
             return r;
         }
-        std::shared_ptr<Func_> m_val;
+        std::shared_ptr<Func_> m_impl;
     };
 
     class Square : public Func_
     {
     public:
-        virtual float forward(float x) const
+        virtual float forward(Pair<float> xs) const override
         {
-            return x * x;
+            return xs.lhs * xs.lhs;
         }
-        virtual float backward(float x, float dy) const
+        virtual Pair<float> backward(Pair<float> xs, float dy) const override
         {
-            return dy * 2.0f * x;
+            return Pair<float>( dy * 2.0f * xs.lhs, 0.0f );
         }
     };
     class Exp : public Func_
     {
     public:
-        virtual float forward(float x) const
+        virtual float forward(Pair<float> xs) const override
         {
-            return std::exp(x);
+            return std::exp(xs.lhs);
         }
-        virtual float backward(float x, float dy) const
+        virtual Pair<float> backward(Pair<float> xs, float dy) const override
         {
-            return dy * std::exp(x);
+            return { dy * std::exp(xs.lhs), 0.0f };
+        }
+    };
+
+    class Plus : public Func_
+    {
+    public:
+        virtual float forward(Pair<float> xs) const override
+        {
+            return xs.lhs + xs.rhs;
+        }
+        virtual Pair<float> backward(Pair<float> xs, float dy) const override
+        {
+            return { dy, dy };
         }
     };
 
     Val square(Val x)
     {
         Func f(std::shared_ptr<Func_>(new Square()));
-        return f.forward(x);
+        return f.forward({ x, Val(0.0f)});
     }
     Val exp(Val x)
     {
         Func f(std::shared_ptr<Func_>(new Exp()));
-        return f.forward(x);
+        return f.forward({ x, Val(0.0f) });
+    }
+    Val plus(Val a, Val b)
+    {
+        Func f(std::shared_ptr<Func_>(new Plus()));
+        return f.forward({ a, b });
     }
 }
 
@@ -118,10 +149,28 @@ using namespace autodiff;
 int main() {
     using namespace pr;
 
+    //{
+    //    using namespace saka;
+    //    Val val(1.2);
+    //    Val r = exp(square(val));
+    //    r.backward();
+
+    //    float d = val.derivative();
+    //    printf("%f\n", d);
+    //}
+
+    //{
+    //    var x = 1.2;
+    //    auto f = [](var x) { return exp( x * x ); };
+    //    var y = f(x);
+    //    auto [ux] = derivatives(y, wrt(x)); 
+    //    printf("%f\n", ux);
+    //}
+
     {
         using namespace saka;
-        Val val(1.2);
-        Val r = exp(square(val));
+        Val val(1.4);
+        Val r = plus(square(val), square(val));
         r.backward();
 
         float d = val.derivative();
@@ -129,10 +178,10 @@ int main() {
     }
 
     {
-        var x = 1.2;
-        auto f = [](var x) { return exp( x * x ); };
+        var x = 1.4;
+        auto f = [](var x) { return x * x + x * x; };
         var y = f(x);
-        auto [ux] = derivatives(y, wrt(x)); 
+        auto [ux] = derivatives(y, wrt(x));
         printf("%f\n", ux);
     }
 
