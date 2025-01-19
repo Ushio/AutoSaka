@@ -3,6 +3,8 @@
 #include <memory>
 #include <stack>
 #include <map>
+#include <set>
+#include <queue>
 
 #include "autodiff/reverse/var.hpp"
 
@@ -36,29 +38,9 @@ namespace saka
     public:
         float value;
         float derivative = 0.0f;
+        int generation = 0;
         std::shared_ptr<Func_> manufacturer;
-
-        void backward(bool leaf)
-        {
-            if (!manufacturer)
-            {
-                return;
-            }
-            if (leaf)
-            {
-                derivative = 1.0f;
-            }
-            Pair<std::shared_ptr<Val_>> inputs = manufacturer->inputs;
-            Pair<float> ds = manufacturer->backward({ inputs.lhs->value, inputs.rhs ? inputs.rhs->value : 0.0f }, derivative);
-            inputs.lhs->derivative += ds.lhs;
-            inputs.lhs->backward(false /*leaf*/);
-
-            if (inputs.rhs)
-            {
-                inputs.rhs->derivative += ds.rhs;
-                inputs.rhs->backward(false /*leaf*/);
-            }
-        }
+        
         std::string nodeType() const { return "Value"; }
     };
 
@@ -72,7 +54,53 @@ namespace saka
         }
         void backward()
         {
-            m_impl->backward(true /*leaf*/);
+            m_impl->derivative = 1.0f;
+
+            auto generationOrder = [](std::shared_ptr<Val_> lhs, std::shared_ptr<Val_> rhs)
+            {
+                return lhs->generation < rhs->generation;
+            };
+
+            //std::stack<std::shared_ptr<Val_>> stack;
+
+            std::priority_queue<
+                std::shared_ptr<Val_>, 
+                std::vector<std::shared_ptr<Val_>>,
+                decltype(generationOrder)
+            > stack(generationOrder);
+            std::set<std::shared_ptr<Val_>> processed;
+
+            stack.push(m_impl);
+
+            
+
+            while (!stack.empty())
+            {
+                std::shared_ptr<Val_> val = stack.top(); stack.pop();
+                if (!val->manufacturer)
+                {
+                    continue;
+                }
+
+                if (processed.count(val))
+                {
+                    continue;
+                }
+                processed.insert(val);
+
+                // printf("g: %d, %s\n", val->generation, val->manufacturer->nodeType().c_str());
+
+                Pair<std::shared_ptr<Val_>> inputs = val->manufacturer->inputs;
+                Pair<float> ds = val->manufacturer->backward({ inputs.lhs->value, inputs.rhs ? inputs.rhs->value : 0.0f }, val->derivative);
+                inputs.lhs->derivative += ds.lhs;
+                stack.push(inputs.lhs);
+
+                if (inputs.rhs)
+                {
+                    inputs.rhs->derivative += ds.rhs;
+                    stack.push(inputs.rhs);
+                }
+            }
         }
         float derivative() const {
             return m_impl->derivative;
@@ -93,17 +121,20 @@ namespace saka
                 std::shared_ptr<Val_> val = stack.top(); stack.pop();
                 int valIdx = nodeIdx++;
                 idTable[val] = valIdx;
-                if (val->manufacturer)
+
+                if (!val->manufacturer)
                 {
-                    int funcIdx = nodeIdx++;
-                    idTable[val->manufacturer] = funcIdx;
+                    continue;
+                }
 
-                    stack.push(val->manufacturer->inputs.lhs);
+                int funcIdx = nodeIdx++;
+                idTable[val->manufacturer] = funcIdx;
 
-                    if (val->manufacturer->inputs.rhs)
-                    {
-                        stack.push(val->manufacturer->inputs.rhs);
-                    }
+                stack.push(val->manufacturer->inputs.lhs);
+
+                if (val->manufacturer->inputs.rhs)
+                {
+                    stack.push(val->manufacturer->inputs.rhs);
                 }
             }
 
@@ -117,7 +148,7 @@ namespace saka
                 char label[256];
                 if (value)
                 {
-                    sprintf(label, "%d [shape=record, label=\"{v:%.3f|d:%.3f}}\"]\n", idx, value->value, value->derivative);
+                    sprintf(label, "%d [shape=record, label=\"{v:%.3f|d:%.3f|g:%d}}\"]\n", idx, value->value, value->derivative, value->generation);
                 }
                 else
                 {
@@ -131,23 +162,25 @@ namespace saka
             while (!stack.empty())
             {
                 std::shared_ptr<Val_> val = stack.top(); stack.pop();
-                if (val->manufacturer)
+
+                if (!val->manufacturer)
                 {
-                    char label[256];
-                    sprintf(label, "%d -> %d\n", idTable[val->manufacturer], idTable[val]);
+                    continue;
+                }
+                char label[256];
+                sprintf(label, "%d -> %d\n", idTable[val->manufacturer], idTable[val]);
+                s += label;
+
+                stack.push(val->manufacturer->inputs.lhs);
+
+                sprintf(label, "%d -> %d\n", idTable[val->manufacturer->inputs.lhs], idTable[val->manufacturer]);
+                s += label;
+
+                if (val->manufacturer->inputs.rhs)
+                {
+                    sprintf(label, "%d -> %d\n", idTable[val->manufacturer->inputs.rhs], idTable[val->manufacturer]);
                     s += label;
-
-                    stack.push(val->manufacturer->inputs.lhs);
-
-                    sprintf(label, "%d -> %d\n", idTable[val->manufacturer->inputs.lhs], idTable[val->manufacturer]);
-                    s += label;
-
-                    if (val->manufacturer->inputs.rhs)
-                    {
-                        sprintf(label, "%d -> %d\n", idTable[val->manufacturer->inputs.rhs], idTable[val->manufacturer]);
-                        s += label;
-                        stack.push(val->manufacturer->inputs.rhs);
-                    }
+                    stack.push(val->manufacturer->inputs.rhs);
                 }
             }
 
@@ -163,11 +196,17 @@ namespace saka
         Func(std::shared_ptr<Func_> f):m_impl(f){}
         Val forward(Pair<Val> xs)
         {
-            
             float y = m_impl->forward({ xs.lhs.m_impl->value, xs.rhs.m_impl ? xs.rhs.m_impl->value : 0.0f });
             Val r(y);
             m_impl->inputs = { xs.lhs.m_impl, xs.rhs.m_impl };
             r.m_impl->manufacturer = m_impl;
+
+            int input_generation = xs.lhs.m_impl->generation;
+            if (xs.rhs.m_impl)
+            {
+                input_generation = std::max(input_generation, xs.rhs.m_impl->generation);
+            }
+            r.m_impl->generation = input_generation + 1;
             return r;
         }
         std::shared_ptr<Func_> m_impl;
@@ -213,20 +252,38 @@ namespace saka
         }
         std::string nodeType() const { return "Plus"; }
     };
+    class Mul : public Func_
+    {
+    public:
+        virtual float forward(Pair<float> xs) const override
+        {
+            return xs.lhs * xs.rhs;
+        }
+        virtual Pair<float> backward(Pair<float> xs, float dy) const override
+        {
+            return { dy * xs.rhs, dy * xs.lhs };
+        }
+        std::string nodeType() const { return "Mul"; }
+    };
 
-    Val square(Val x)
+    inline Val square(Val x)
     {
         Func f(std::shared_ptr<Func_>(new Square()));
         return f.forward({ x, Val()});
     }
-    Val exp(Val x)
+    inline Val exp(Val x)
     {
         Func f(std::shared_ptr<Func_>(new Exp()));
         return f.forward({ x, Val() });
     }
-    Val plus(Val a, Val b)
+    inline Val operator+(Val a, Val b)
     {
         Func f(std::shared_ptr<Func_>(new Plus()));
+        return f.forward({ a, b });
+    }
+    inline Val operator*(Val a, Val b)
+    {
+        Func f(std::shared_ptr<Func_>(new Mul()));
         return f.forward({ a, b });
     }
 }
@@ -269,6 +326,7 @@ int main() {
 
     //    float d = val.derivative();
     //    printf("%f\n", d);
+    //    printf("%s\n", r.dotLang().c_str());
     //}
 
     //{
@@ -282,12 +340,12 @@ int main() {
     // A complex graph
     {
         using namespace saka;
-        Val x(1.4);
+        Val x(1.4f);
         Val a = square(x);
-
+        //Val a = x;
         Val b = exp(a);
         Val c = square(a);
-        Val y = plus(b, c);
+        Val y = b + c;
         
         y.backward();
 
@@ -298,9 +356,10 @@ int main() {
     }
 
     {
-        var x = 1.4;
+        var x = 1.4f;
         auto f = [](var x) {
             auto a = x * x;
+            //auto a = x;
             auto b = exp(a);
             auto c = a * a;
             return b + c;
@@ -308,6 +367,22 @@ int main() {
         var y = f(x);
         auto [ux] = derivatives(y, wrt(x));
         printf("%f\n", ux);
+    }
+
+    {
+        var x = 1.4f;
+        auto f = [](var x) {
+            auto a = x * x;
+            //auto a = x;
+            auto b = exp(a);
+            auto c = a * a;
+            return saka::Pair<var>(b * c, b + c);
+        };
+        saka::Pair<var> y = f(x);
+        auto [dydx0] = derivatives(y.lhs, wrt(x));
+        auto [dydx1] = derivatives(y.rhs, wrt(x));
+        printf("%f\n", dydx0);
+        printf("%f\n", dydx1);
     }
 
     //var x = 1.0;         // the input variable x
