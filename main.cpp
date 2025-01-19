@@ -18,37 +18,37 @@ namespace saka
         T lhs, rhs;
     };
 
-    class Node_ {
+    class Node {
     public:
-        virtual ~Node_() {}
+        virtual ~Node() {}
         virtual std::string nodeType() const = 0;
     };
 
-    class Val_;
-    class Func_ : public Node_
+    class Val;
+    class Func : public Node
     {
     public:
-        Pair<std::shared_ptr<Val_>> inputs;
+        Pair<std::shared_ptr<Val>> inputs;
 
         virtual float forward(Pair<float> xs) const = 0;
         virtual Pair<float> backward(Pair<float> xs, float dy) const = 0;
     };
-    class Val_ : public Node_
+    class Val : public Node
     {
     public:
         float value;
         float derivative = 0.0f;
         int generation = 0;
-        std::shared_ptr<Func_> manufacturer;
+        std::shared_ptr<Func> manufacturer;
         
         std::string nodeType() const { return "Value"; }
     };
 
-    class Val
+    class ValRef
     {
     public:
-        Val() {} // null
-        Val(float value):m_impl(new Val_())
+        ValRef() {} // null
+        ValRef(float value):m_impl(new Val())
         {
             m_impl->value = value;
         }
@@ -56,19 +56,19 @@ namespace saka
         {
             m_impl->derivative = 1.0f;
 
-            auto generationOrder = [](std::shared_ptr<Val_> lhs, std::shared_ptr<Val_> rhs)
+            auto generationOrder = [](std::shared_ptr<Val> lhs, std::shared_ptr<Val> rhs)
             {
                 return lhs->generation < rhs->generation;
             };
 
-            //std::stack<std::shared_ptr<Val_>> stack;
+            //std::stack<std::shared_ptr<Val>> stack;
 
             std::priority_queue<
-                std::shared_ptr<Val_>, 
-                std::vector<std::shared_ptr<Val_>>,
+                std::shared_ptr<Val>, 
+                std::vector<std::shared_ptr<Val>>,
                 decltype(generationOrder)
             > stack(generationOrder);
-            std::set<std::shared_ptr<Val_>> processed;
+            std::set<std::shared_ptr<Val>> processed;
 
             stack.push(m_impl);
 
@@ -76,7 +76,7 @@ namespace saka
 
             while (!stack.empty())
             {
-                std::shared_ptr<Val_> val = stack.top(); stack.pop();
+                std::shared_ptr<Val> val = stack.top(); stack.pop();
                 if (!val->manufacturer)
                 {
                     continue;
@@ -90,7 +90,7 @@ namespace saka
 
                 // printf("g: %d, %s\n", val->generation, val->manufacturer->nodeType().c_str());
 
-                Pair<std::shared_ptr<Val_>> inputs = val->manufacturer->inputs;
+                Pair<std::shared_ptr<Val>> inputs = val->manufacturer->inputs;
                 Pair<float> ds = val->manufacturer->backward({ inputs.lhs->value, inputs.rhs ? inputs.rhs->value : 0.0f }, val->derivative);
                 inputs.lhs->derivative += ds.lhs;
                 stack.push(inputs.lhs);
@@ -110,15 +110,15 @@ namespace saka
             std::string s;
             s += "digraph g{\n";
 
-            std::stack<std::shared_ptr<Val_>> stack;
+            std::stack<std::shared_ptr<Val>> stack;
             stack.push(m_impl);
 
-            std::map<std::shared_ptr<Node_>, int> idTable;
+            std::map<std::shared_ptr<Node>, int> idTable;
 
             int nodeIdx = 0;
             while (!stack.empty())
             {
-                std::shared_ptr<Val_> val = stack.top(); stack.pop();
+                std::shared_ptr<Val> val = stack.top(); stack.pop();
                 int valIdx = nodeIdx++;
                 idTable[val] = valIdx;
 
@@ -140,10 +140,10 @@ namespace saka
 
             for (auto nodes : idTable)
             {
-                std::shared_ptr<Node_> node = nodes.first;
+                std::shared_ptr<Node> node = nodes.first;
                 int idx = nodes.second;
                 
-                std::shared_ptr<Val_> value = std::dynamic_pointer_cast<Val_>(node);
+                std::shared_ptr<Val> value = std::dynamic_pointer_cast<Val>(node);
 
                 char label[256];
                 if (value)
@@ -161,7 +161,7 @@ namespace saka
             stack.push(m_impl);
             while (!stack.empty())
             {
-                std::shared_ptr<Val_> val = stack.top(); stack.pop();
+                std::shared_ptr<Val> val = stack.top(); stack.pop();
 
                 if (!val->manufacturer)
                 {
@@ -188,16 +188,16 @@ namespace saka
 
             return s;
         }
-        std::shared_ptr<Val_> m_impl;
+        std::shared_ptr<Val> m_impl;
     };
-    class Func
+    class FuncRef
     {
     public:
-        Func(std::shared_ptr<Func_> f):m_impl(f){}
-        Val forward(Pair<Val> xs)
+        FuncRef(std::shared_ptr<Func> f):m_impl(f){}
+        ValRef forward(Pair<ValRef> xs)
         {
             float y = m_impl->forward({ xs.lhs.m_impl->value, xs.rhs.m_impl ? xs.rhs.m_impl->value : 0.0f });
-            Val r(y);
+            ValRef r(y);
             m_impl->inputs = { xs.lhs.m_impl, xs.rhs.m_impl };
             r.m_impl->manufacturer = m_impl;
 
@@ -209,10 +209,10 @@ namespace saka
             r.m_impl->generation = input_generation + 1;
             return r;
         }
-        std::shared_ptr<Func_> m_impl;
+        std::shared_ptr<Func> m_impl;
     };
 
-    class Square : public Func_
+    class Square : public Func
     {
     public:
         virtual float forward(Pair<float> xs) const override
@@ -225,7 +225,7 @@ namespace saka
         }
         std::string nodeType() const { return "Square"; }
     };
-    class Exp : public Func_
+    class Exp : public Func
     {
     public:
         virtual float forward(Pair<float> xs) const override
@@ -239,7 +239,7 @@ namespace saka
         std::string nodeType() const { return "Exp"; }
     };
 
-    class Plus : public Func_
+    class Plus : public Func
     {
     public:
         virtual float forward(Pair<float> xs) const override
@@ -252,7 +252,7 @@ namespace saka
         }
         std::string nodeType() const { return "Plus"; }
     };
-    class Mul : public Func_
+    class Mul : public Func
     {
     public:
         virtual float forward(Pair<float> xs) const override
@@ -266,24 +266,24 @@ namespace saka
         std::string nodeType() const { return "Mul"; }
     };
 
-    inline Val square(Val x)
+    inline ValRef square(ValRef x)
     {
-        Func f(std::shared_ptr<Func_>(new Square()));
-        return f.forward({ x, Val()});
+        FuncRef f(std::shared_ptr<Func>(new Square()));
+        return f.forward({ x, ValRef()});
     }
-    inline Val exp(Val x)
+    inline ValRef exp(ValRef x)
     {
-        Func f(std::shared_ptr<Func_>(new Exp()));
-        return f.forward({ x, Val() });
+        FuncRef f(std::shared_ptr<Func>(new Exp()));
+        return f.forward({ x, ValRef() });
     }
-    inline Val operator+(Val a, Val b)
+    inline ValRef operator+(ValRef a, ValRef b)
     {
-        Func f(std::shared_ptr<Func_>(new Plus()));
+        FuncRef f(std::shared_ptr<Func>(new Plus()));
         return f.forward({ a, b });
     }
-    inline Val operator*(Val a, Val b)
+    inline ValRef operator*(ValRef a, ValRef b)
     {
-        Func f(std::shared_ptr<Func_>(new Mul()));
+        FuncRef f(std::shared_ptr<Func>(new Mul()));
         return f.forward({ a, b });
     }
 }
@@ -340,12 +340,12 @@ int main() {
     // A complex graph
     {
         using namespace saka;
-        Val x(1.4f);
-        Val a = square(x);
-        //Val a = x;
-        Val b = exp(a);
-        Val c = square(a);
-        Val y = b + c;
+        ValRef x(1.4f);
+        ValRef a = square(x);
+        //ValRef a = x;
+        ValRef b = exp(a);
+        ValRef c = square(a);
+        ValRef y = b + c;
         
         y.backward();
 
@@ -369,21 +369,21 @@ int main() {
         printf("%f\n", ux);
     }
 
-    {
-        var x = 1.4f;
-        auto f = [](var x) {
-            auto a = x * x;
-            //auto a = x;
-            auto b = exp(a);
-            auto c = a * a;
-            return saka::Pair<var>(b * c, b + c);
-        };
-        saka::Pair<var> y = f(x);
-        auto [dydx0] = derivatives(y.lhs, wrt(x));
-        auto [dydx1] = derivatives(y.rhs, wrt(x));
-        printf("%f\n", dydx0);
-        printf("%f\n", dydx1);
-    }
+    //{
+    //    var x = 1.4f;
+    //    auto f = [](var x) {
+    //        auto a = x * x;
+    //        //auto a = x;
+    //        auto b = exp(a);
+    //        auto c = a * a;
+    //        return saka::Pair<var>(b * c, b + c);
+    //    };
+    //    saka::Pair<var> y = f(x);
+    //    auto [dydx0] = derivatives(y.lhs, wrt(x));
+    //    auto [dydx1] = derivatives(y.rhs, wrt(x));
+    //    printf("%f\n", dydx0);
+    //    printf("%f\n", dydx1);
+    //}
 
     //var x = 1.0;         // the input variable x
     //var y = 2.0;         // the input variable y
