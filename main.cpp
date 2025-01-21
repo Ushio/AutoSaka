@@ -230,11 +230,11 @@ namespace saka
     public:
         virtual float forward(Pair<float> xs) const override
         {
-            return std::exp(xs.lhs);
+            return std::expf(xs.lhs);
         }
         virtual Pair<float> backward(Pair<float> xs, float dy) const override
         {
-            return { dy * std::exp(xs.lhs), 0.0f };
+            return { dy * std::expf(xs.lhs), 0.0f };
         }
         std::string nodeType() const { return "Exp"; }
     };
@@ -286,6 +286,59 @@ namespace saka
         FuncRef f(std::shared_ptr<Func>(new Mul()));
         return f.forward({ a, b });
     }
+
+
+    // -- forward module -- 
+    template <int NDerivatives>
+    class DVal
+    {
+    public:
+        DVal() {}
+        DVal(float v, int indexOfVal):value(v)
+        {
+            for ( int i = 0; i < NDerivatives; i++ )
+            {
+                dvalues[i] = i == indexOfVal ? 1.0f : 0.0f;
+            }
+        }
+        float value;
+        float dvalues[NDerivatives];
+    };
+
+    template <int NDerivatives, class F, class DF>
+    inline DVal<NDerivatives> apply(DVal<NDerivatives> x, F f, DF df )
+    {
+        DVal<NDerivatives> r;
+        r.value = f(x.value);
+        for (int i = 0; i < NDerivatives; i++)
+        {
+            r.dvalues[i] = x.dvalues[i] * df(x.value);
+        }
+        return r;
+    }
+
+    template <int NDerivatives>
+    inline DVal<NDerivatives> square(DVal<NDerivatives> x)
+    {
+        return apply(x, [](float x) { return x * x; }, [](float x) { return 2.0f * x; });
+    }
+    template <int NDerivatives>
+    inline DVal<NDerivatives> exp(DVal<NDerivatives> x)
+    {
+        return apply(x, [](float x) { return std::expf(x); }, [](float x) { return std::expf(x); });
+    }
+
+    template <int NDerivatives>
+    inline DVal<NDerivatives> operator+(DVal<NDerivatives> x0, DVal<NDerivatives> x1)
+    {
+        DVal<NDerivatives> r;
+        r.value = x0.value + x1.value;
+        for (int i = 0; i < NDerivatives; i++)
+        {
+            r.dvalues[i] = x0.dvalues[i] + x1.dvalues[i];
+        }
+        return r;
+    }
 }
 
 using namespace autodiff;
@@ -300,42 +353,59 @@ using namespace autodiff;
 int main() {
     using namespace pr;
 
-    //{
-    //    using namespace saka;
-    //    Val val(1.2);
-    //    Val r = exp(square(val));
-    //    r.backward();
+    {
+        using namespace saka;
+        ValRef val(1.2);
+        ValRef r = exp(square(val));
+        r.backward();
 
-    //    float d = val.derivative();
-    //    printf("%f\n", d);
-    //}
+        float d = val.derivative();
+        printf("%f\n", d);
+    }
+    {
+        using namespace saka;
+        DVal<1> val(1.2, 0);
+        DVal<1> r = exp(square(val));
 
-    //{
-    //    var x = 1.2;
-    //    auto f = [](var x) { return exp( x * x ); };
-    //    var y = f(x);
-    //    auto [ux] = derivatives(y, wrt(x)); 
-    //    printf("%f\n", ux);
-    //}
+        printf("%f\n", r.dvalues[0]);
+    }
+    {
+        var x = 1.2;
+        auto f = [](var x) { return exp( x * x ); };
+        var y = f(x);
+        auto [ux] = derivatives(y, wrt(x)); 
+        printf("%f\n", ux);
+    }
 
-    //{
-    //    using namespace saka;
-    //    Val val(1.4);
-    //    Val r = plus(square(val), square(val));
-    //    r.backward();
+    printf("--\n");
 
-    //    float d = val.derivative();
-    //    printf("%f\n", d);
-    //    printf("%s\n", r.dotLang().c_str());
-    //}
+    {
+        using namespace saka;
+        ValRef val(1.4);
+        ValRef r = square(val) + square(val);
+        r.backward();
 
-    //{
-    //    var x = 1.4;
-    //    auto f = [](var x) { return x * x + x * x; };
-    //    var y = f(x);
-    //    auto [ux] = derivatives(y, wrt(x));
-    //    printf("%f\n", ux);
-    //}
+        float d = val.derivative();
+        printf("%f\n", d);
+        //printf("%s\n", r.dotLang().c_str());
+    }
+    {
+        using namespace saka;
+        DVal<1> val(1.4, 0);
+        DVal<1> r = square(val) + square(val);
+
+        printf("%f\n", r.dvalues[0]);
+        //printf("%s\n", r.dotLang().c_str());
+    }
+    {
+        var x = 1.4;
+        auto f = [](var x) { return x * x + x * x; };
+        var y = f(x);
+        auto [ux] = derivatives(y, wrt(x));
+        printf("%f\n", ux);
+    }
+
+    printf("--\n");
 
     // A complex graph
     {
@@ -353,6 +423,35 @@ int main() {
         printf("%f\n", d);
 
         printf("%s\n", y.dotLang().c_str());
+    }
+    {
+        using namespace saka;
+        DVal<1> x(1.4f, 0);
+        DVal<1> a = square(x);
+        //ValRef a = x;
+        DVal<1> b = exp(a);
+        DVal<1> c = square(a);
+        DVal<1> y = b + c;
+
+        float d = y.dvalues[0];
+        printf("%f\n", d);
+    }
+
+    {
+        using namespace saka;
+        ValRef x(1.4f);
+        ValRef a = square(x);
+        //ValRef a = x;
+        ValRef b = exp(a);
+        ValRef c = square(a);
+        ValRef y = b + c;
+
+        y.backward();
+
+        float d = x.derivative();
+        printf("%f\n", d);
+
+        //printf("%s\n", y.dotLang().c_str());
     }
 
     {
