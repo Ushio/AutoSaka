@@ -339,6 +339,28 @@ namespace saka
         }
         return r;
     }
+    template <int NDerivatives>
+    inline DVal<NDerivatives> operator*(DVal<NDerivatives> x0, DVal<NDerivatives> x1)
+    {
+        DVal<NDerivatives> r;
+        r.value = x0.value * x1.value;
+        for (int i = 0; i < NDerivatives; i++)
+        {
+            r.dvalues[i] = x1.value * x0.dvalues[i] + x0.value * x1.dvalues[i];
+        }
+        return r;
+    }
+    template <int NDerivatives>
+    inline DVal<NDerivatives> operator/(DVal<NDerivatives> x0, DVal<NDerivatives> x1)
+    {
+        DVal<NDerivatives> r;
+        r.value = x0.value / x1.value;
+        for (int i = 0; i < NDerivatives; i++)
+        {
+            r.dvalues[i] = ( x1.value * x0.dvalues[i] - x0.value * x1.dvalues[i] ) / (x1.value * x1.value);
+        }
+        return r;
+    }
 }
 
 using namespace autodiff;
@@ -408,22 +430,22 @@ int main() {
     printf("--\n");
 
     // A complex graph
-    {
-        using namespace saka;
-        ValRef x(1.4f);
-        ValRef a = square(x);
-        //ValRef a = x;
-        ValRef b = exp(a);
-        ValRef c = square(a);
-        ValRef y = b + c;
-        
-        y.backward();
+    //{
+    //    using namespace saka;
+    //    ValRef x(1.4f);
+    //    ValRef a = square(x);
+    //    //ValRef a = x;
+    //    ValRef b = exp(a);
+    //    ValRef c = square(a);
+    //    ValRef y = b / c;
+    //    
+    //    y.backward();
 
-        float d = x.derivative();
-        printf("%f\n", d);
+    //    float d = x.derivative();
+    //    printf("%f\n", d);
 
-        printf("%s\n", y.dotLang().c_str());
-    }
+    //    printf("%s\n", y.dotLang().c_str());
+    //}
     {
         using namespace saka;
         DVal<1> x(1.4f, 0);
@@ -431,27 +453,10 @@ int main() {
         //ValRef a = x;
         DVal<1> b = exp(a);
         DVal<1> c = square(a);
-        DVal<1> y = b + c;
+        DVal<1> y = b / c;
 
         float d = y.dvalues[0];
         printf("%f\n", d);
-    }
-
-    {
-        using namespace saka;
-        ValRef x(1.4f);
-        ValRef a = square(x);
-        //ValRef a = x;
-        ValRef b = exp(a);
-        ValRef c = square(a);
-        ValRef y = b + c;
-
-        y.backward();
-
-        float d = x.derivative();
-        printf("%f\n", d);
-
-        //printf("%s\n", y.dotLang().c_str());
     }
 
     {
@@ -461,7 +466,7 @@ int main() {
             //auto a = x;
             auto b = exp(a);
             auto c = a * a;
-            return b + c;
+            return b / c;
         };
         var y = f(x);
         auto [ux] = derivatives(y, wrt(x));
