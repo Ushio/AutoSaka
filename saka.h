@@ -49,7 +49,12 @@ namespace saka
     template <int NDerivatives>
     inline DVal<NDerivatives> exp(DVal<NDerivatives> x)
     {
-        return apply(x, [](float x) { return std::expf(x); }, [](float x) { return std::expf(x); });
+        return apply(x, [](float x) { return expf(x); }, [](float x) { return expf(x); });
+    }
+    template <int NDerivatives>
+    inline DVal<NDerivatives> sqrt(DVal<NDerivatives> x)
+    {
+        return apply(x, [](float x) { return sqrtf(x); }, [](float x) { return 0.5f / sqrtf(x); });
     }
 
     template <int NDerivatives>

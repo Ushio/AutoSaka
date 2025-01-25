@@ -14,6 +14,12 @@ T simple_1( T x0 )
     return exp(x0 * x0);
 }
 template <class T>
+T simple_sqrt(T x0)
+{
+    return sqrt(x0);
+}
+
+template <class T>
 T four_arithmetic_ops(T x0)
 {
     return (x0 * x0 * T(2.0f) - x0) / x0 + x0;
@@ -43,6 +49,7 @@ TEST_CASE("Simples", "") {
     std::vector<unary_function> fs = {
         {simple_1<float>, simple_1<DVal<1>>, simple_1<var>, -3.0f, 3.0f},
         {four_arithmetic_ops<float>, four_arithmetic_ops<DVal<1>>, four_arithmetic_ops<var>, -4.0f, -0.5f},
+        {simple_sqrt<float>, simple_sqrt<DVal<1>>, simple_sqrt<var>, 0.1f, 10.0f},
     };
 
     pr::PCG rng;
