@@ -61,6 +61,14 @@ namespace saka
             [](float x0, float x1) { return 1.0f; });
     }
     template <int NDerivatives>
+    inline DVal<NDerivatives> operator-(DVal<NDerivatives> x0, DVal<NDerivatives> x1)
+    {
+        return apply(x0, x1,
+            [](float x0, float x1) { return x0 - x1; },
+            [](float x0, float x1) { return 1.0f; },
+            [](float x0, float x1) { return -1.0f; });
+    }
+    template <int NDerivatives>
     inline DVal<NDerivatives> operator*(DVal<NDerivatives> x0, DVal<NDerivatives> x1)
     {
         return apply(x0, x1,
