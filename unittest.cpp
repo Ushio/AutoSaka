@@ -83,3 +83,30 @@ TEST_CASE("complex_0", "") {
         REQUIRE(fabsf(dudx - u.g) < 1.0e-5f);
     }
 }
+dual complex_1_ref(dual x, dual y, dual z)
+{
+    return (x + y + z) * exp(x * y * z);
+}
+dval complex_1(dval x, dval y, dval z)
+{
+    return (x + y + z) * exp(x * y * z);
+}
+
+TEST_CASE("complex_1", "") {
+    pr::PCG rng;
+
+    for (int i = 0; i < 1000; i++)
+    {
+        dual x_ref = -1.0f + 2.0f * rng.uniformf();
+        dual y_ref = -1.0f + 2.0f * rng.uniformf();
+        dual z_ref = -1.0f + 2.0f * rng.uniformf();
+        double dudx = derivative(complex_1_ref, wrt(x_ref), at(x_ref, y_ref, z_ref));
+
+        dval x = x_ref.val; x.requires_grad();
+        dval y = y_ref.val;
+        dval z = z_ref.val;
+        dval u = complex_1(x, y, z);
+
+        REQUIRE(fabsf(dudx - u.g) < 1.0e-5f);
+    }
+}
