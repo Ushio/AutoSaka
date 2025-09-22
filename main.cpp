@@ -9,42 +9,42 @@ using namespace autodiff;
 int main() {
     using namespace pr;
 
-    {
-        using namespace saka;
-        DVal<1> val(1.2);
-        val.requireDerivative(0);
-        DVal<1> r = exp(val * val);
+    //{
+    //    using namespace saka;
+    //    DVal<1> val(1.2);
+    //    val.requireDerivative(0);
+    //    DVal<1> r = exp(val * val);
 
-        printf("%f\n", r.dvalues[0]);
-    }
-    {
-        var x = 1.2;
-        auto f = [](var x) { return exp( x * x ); };
-        var y = f(x);
-        auto [ux] = derivatives(y, wrt(x)); 
-        printf("%f\n", ux);
-    }
+    //    printf("%f\n", r.dvalues[0]);
+    //}
+    //{
+    //    var x = 1.2;
+    //    auto f = [](var x) { return exp( x * x ); };
+    //    var y = f(x);
+    //    auto [ux] = derivatives(y, wrt(x)); 
+    //    printf("%f\n", ux);
+    //}
 
-    printf("--\n");
+    //printf("--\n");
 
-    {
-        using namespace saka;
-        DVal<1> val(1.4);
-        val.requireDerivative(0);
-        DVal<1> r = val * val + val * val;
+    //{
+    //    using namespace saka;
+    //    DVal<1> val(1.4);
+    //    val.requireDerivative(0);
+    //    DVal<1> r = val * val + val * val;
 
-        printf("%f\n", r.dvalues[0]);
-        //printf("%s\n", r.dotLang().c_str());
-    }
-    {
-        var x = 1.4;
-        auto f = [](var x) { return x * x + x * x; };
-        var y = f(x);
-        auto [ux] = derivatives(y, wrt(x));
-        printf("%f\n", ux);
-    }
+    //    printf("%f\n", r.dvalues[0]);
+    //    //printf("%s\n", r.dotLang().c_str());
+    //}
+    //{
+    //    var x = 1.4;
+    //    auto f = [](var x) { return x * x + x * x; };
+    //    var y = f(x);
+    //    auto [ux] = derivatives(y, wrt(x));
+    //    printf("%f\n", ux);
+    //}
 
-    printf("--\n");
+    //printf("--\n");
 
     // A complex graph
     //{
@@ -63,19 +63,25 @@ int main() {
 
     //    printf("%s\n", y.dotLang().c_str());
     //}
-    {
-        using namespace saka;
-        DVal<1> x(1.4f);
-        x.requireDerivative(0);
-        DVal<1> a = x * x;
-        //ValRef a = x;
-        DVal<1> b = exp(a);
-        DVal<1> c = a * a;
-        DVal<1> y = b / c;
 
-        float d = y.dvalues[0];
-        printf("%f\n", d);
-    }
+    //glm::tvec3<saka::DVal<3>> dVec3(1, 0, 0);
+    //dVec3.x.requireDerivative(0);
+    //dVec3.y.requireDerivative(1);
+    //dVec3.z.requireDerivative(2);
+
+    //{
+    //    using namespace saka;
+    //    DVal<1> x(1.4f);
+    //    x.requireDerivative(0);
+    //    DVal<1> a = x * x;
+    //    //ValRef a = x;
+    //    DVal<1> b = exp(a);
+    //    DVal<1> c = a * a;
+    //    DVal<1> y = b / c;
+
+    //    float d = y.dvalues[0];
+    //    printf("%f\n", d);
+    //}
 
     {
         var x = 1.4f;

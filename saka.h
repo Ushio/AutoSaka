@@ -2,91 +2,85 @@
 
 namespace saka
 {
-    // -- forward module -- 
-    template <int NDerivatives>
-    class DVal
+    class dval
     {
     public:
-        DVal() {}
-        DVal(float v) :value(v)
+        dval(): v(0.0f), g(0.0f) {}
+        dval(float x) :v(x), g(0.0f) {}
+
+        void requires_grad()
         {
-            for (int i = 0; i < NDerivatives; i++)
-            {
-                dvalues[i] = 0.0f;
-            }
+            g = 1.0f;
         }
-        void requireDerivative(int indexOfVal)
-        {
-            dvalues[indexOfVal] = 1.0f;
-        }
-        float value;
-        float dvalues[NDerivatives];
+
+        float v;
+        float g;
     };
 
-    template <int NDerivatives, class F, class DF>
-    inline DVal<NDerivatives> apply(DVal<NDerivatives> x, F f, DF df)
+    namespace details
     {
-        DVal<NDerivatives> r;
-        r.value = f(x.value);
-        for (int i = 0; i < NDerivatives; i++)
+        template <class F, class dFdx>
+        inline dval unary(dval x, F f, dFdx dfdx)
         {
-            r.dvalues[i] = x.dvalues[i] * df(x.value);
+            dval u;
+            u.v = f(x.v);
+            u.g = x.g * dfdx(x.v);
+            return u;
         }
-        return r;
+
+        template <class F, class dFdx, class dFdy>
+        inline dval binary(dval x, dval y, F f, dFdx dfdx, dFdy dfdy)
+        {
+            dval u;
+            u.v = f(x.v, y.v);
+            u.g = x.g * dfdx(x.v, y.v) + y.g * dfdy(x.v, y.v);
+            return u;
+        }
     }
-    template <int NDerivatives, class F, class DF0, class DF1>
-    inline DVal<NDerivatives> apply(DVal<NDerivatives> x0, DVal<NDerivatives> x1, F f, DF0 df0, DF1 df1)
+    inline dval operator+(dval x, dval y)
     {
-        DVal<NDerivatives> r;
-        r.value = f(x0.value, x1.value);
-        for (int i = 0; i < NDerivatives; i++)
-        {
-            r.dvalues[i] = x0.dvalues[i] * df0(x0.value, x1.value) + x1.dvalues[i] * df1(x0.value, x1.value);
-        }
-        return r;
+        return details::binary(x, y,
+            [](float x, float y) { return x + y; },
+            [](float x, float y) { return 1.0f; }, // df/dx
+            [](float x, float y) { return 1.0f; }  // df/dy
+        );
+    }
+    inline dval operator-(dval x, dval y)
+    {
+        return details::binary(x, y,
+            [](float x, float y) { return x - y; },
+            [](float x, float y) { return +1.0f; },
+            [](float x, float y) { return -1.0f; });
+    }
+    inline dval operator*(dval x, dval y)
+    {
+        return details::binary(x, y,
+            [](float x, float y) { return x * y; },
+            [](float x, float y) { return y; }, // df/dx
+            [](float x, float y) { return x; }  // df/dy
+        );
+    }
+    inline dval operator/(dval x, dval y)
+    {
+        return details::binary(x, y,
+            [](float x, float y) { return x / y; },
+            [](float x, float y) { return 1.0f / y; },
+            [](float x, float y) { return -x / (y * y); });
+    }
+    inline dval exp(dval x)
+    {
+        return details::unary(x, 
+            [](float x) { return expf(x); }, 
+            [](float x) { return expf(x); } // df/dx
+        );
+    }
+    inline dval sqrt(dval x)
+    {
+        return details::unary(x, 
+            [](float x) { return sqrtf(x); }, 
+            [](float x) { return 0.5f / sqrtf(x); } // df/dx
+        );
     }
 
-    template <int NDerivatives>
-    inline DVal<NDerivatives> exp(DVal<NDerivatives> x)
-    {
-        return apply(x, [](float x) { return expf(x); }, [](float x) { return expf(x); });
-    }
-    template <int NDerivatives>
-    inline DVal<NDerivatives> sqrt(DVal<NDerivatives> x)
-    {
-        return apply(x, [](float x) { return sqrtf(x); }, [](float x) { return 0.5f / sqrtf(x); });
-    }
 
-    template <int NDerivatives>
-    inline DVal<NDerivatives> operator+(DVal<NDerivatives> x0, DVal<NDerivatives> x1)
-    {
-        return apply(x0, x1,
-            [](float x0, float x1) { return x0 + x1; },
-            [](float x0, float x1) { return 1.0f; },
-            [](float x0, float x1) { return 1.0f; });
-    }
-    template <int NDerivatives>
-    inline DVal<NDerivatives> operator-(DVal<NDerivatives> x0, DVal<NDerivatives> x1)
-    {
-        return apply(x0, x1,
-            [](float x0, float x1) { return x0 - x1; },
-            [](float x0, float x1) { return 1.0f; },
-            [](float x0, float x1) { return -1.0f; });
-    }
-    template <int NDerivatives>
-    inline DVal<NDerivatives> operator*(DVal<NDerivatives> x0, DVal<NDerivatives> x1)
-    {
-        return apply(x0, x1,
-            [](float x0, float x1) { return x0 * x1; },
-            [](float x0, float x1) { return x1; },
-            [](float x0, float x1) { return x0; });
-    }
-    template <int NDerivatives>
-    inline DVal<NDerivatives> operator/(DVal<NDerivatives> x0, DVal<NDerivatives> x1)
-    {
-        return apply(x0, x1,
-            [](float x0, float x1) { return x0 / x1; },
-            [](float x0, float x1) { return 1.0f / x1; },
-            [](float x0, float x1) { return -x0 / (x1 * x1); });
-    }
 }
