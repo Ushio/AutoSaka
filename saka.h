@@ -11,8 +11,9 @@ namespace saka
     class dval
     {
     public:
-        SAKA_DEVICE dval() : v(0.0f), g(0.0f) {}
+        SAKA_DEVICE dval(): v(0.0f), g(0.0f) {}
         SAKA_DEVICE dval(float x) : v(x), g(0.0f) {}
+        SAKA_DEVICE dval(float x, bool requires_grad) :v(x), g(requires_grad) {}
 
         SAKA_DEVICE void requires_grad()
         {
@@ -82,15 +83,15 @@ namespace saka
     }
     SAKA_DEVICE inline dval exp(dval x)
     {
-        return details::unary(x,
-            [](float x) { return expf(x); },
+        return details::unary(x, 
+            [](float x) { return expf(x); }, 
             [](float x) { return expf(x); } // df/dx
         );
     }
     SAKA_DEVICE inline dval sqrt(dval x)
     {
-        return details::unary(x,
-            [](float x) { return sqrtf(x); },
+        return details::unary(x, 
+            [](float x) { return sqrtf(x); }, 
             [](float x) { return 0.5f / sqrtf(x); } // df/dx
         );
     }
